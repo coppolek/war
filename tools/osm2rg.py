@@ -193,28 +193,50 @@ def main():
             if grid[j][i] == LOT:
                 c = sum(occ[jj][ii] for jj in range(max(0, j - 2), min(N, j + 3)) for ii in range(max(0, i - 2), min(N, i + 3)))
                 if c >= 20: grid[j][i] = COBBLE
+    # terra certa: tutto ciò che OSM descrive come costruito/strada/verde non può essere mare
+    landmask = set()
+    for j in range(N):
+        for i in range(N):
+            if occ[j][i]: landmask.add((i, j))
+    for pts in built + green + plaza + beach:
+        tmp = [[0] * N for _ in range(N)]; fill_poly(tmp, pts, 1)
+        for j in range(N):
+            for i in range(N):
+                if tmp[j][i]: landmask.add((i, j))
+    for pts, hw, tg in roads:
+        if tg.get('bridge') not in (None, 'no') or tg.get('tunnel') in ('yes', 'building_passage', 'culvert'): continue
+        stamp(landmask, pts)
     # acqua: poligoni, mare (flood fill dalle coste), fiumi
     for p in water_poly: fill_poly(grid, p, WATER)
     if coast:
         barrier = set()
         for c in coast: stamp(barrier, c)
-        seeds = set()
-        for c in coast:
-            for k in range(len(c) - 1):
-                x1, y1 = c[k]; x2, y2 = c[k + 1]
-                L = math.hypot(x2 - x1, y2 - y1)
-                if L < 1e-6: continue
-                mx, my = (x1 + x2) / 2, (y1 + y2) / 2
-                nx, ny = -(y2 - y1) / L, (x2 - x1) / L        # a destra del verso (asse y verso sud) = mare
-                for dist in (1.6, 2.5):
-                    i, j = int(math.floor(mx + nx * dist)), int(math.floor(my + ny * dist))
-                    if 0 <= i < N and 0 <= j < N and (i, j) not in barrier: seeds.add((i, j))
+        def clen(c): return sum(math.hypot(c[k + 1][0] - c[k][0], c[k + 1][1] - c[k][1]) for k in range(len(c) - 1))
+        main = [c for c in coast if clen(c) >= 12] or coast      # ignora pezzetti corti (moli, bacini)
+        def mkseeds(sign):
+            sd = set()
+            for c in main:
+                for k in range(len(c) - 1):
+                    x1, y1 = c[k]; x2, y2 = c[k + 1]
+                    L = math.hypot(x2 - x1, y2 - y1)
+                    if L < 1e-6: continue
+                    mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+                    nx, ny = sign * -(y2 - y1) / L, sign * (x2 - x1) / L
+                    for dist in (1.6, 2.5):
+                        i, j = int(math.floor(mx + nx * dist)), int(math.floor(my + ny * dist))
+                        if 0 <= i < N and 0 <= j < N and (i, j) not in barrier and (i, j) not in landmask: sd.add((i, j))
+            return sd
+        def land_near(sd):   # quanta terra certa c'è attorno ai semi: dal lato mare ce n'è poca
+            return sum(1 for (i, j) in sd for dj in range(-4, 5) for di in range(-4, 5) if (i + di, j + dj) in landmask) / max(1, len(sd))
+        s_pos, s_neg = mkseeds(1), mkseeds(-1)
+        lp, ln = land_near(s_pos), land_near(s_neg)
+        seeds = s_neg if (lp > 12 and lp > 2 * ln) else s_pos      # regola OSM: mare a destra; si inverte solo se i dati la contraddicono nettamente
         stack = list(seeds); sea = set(seeds)
         while stack:
             i, j = stack.pop()
             for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 ii, jj = i + di, j + dj
-                if 0 <= ii < N and 0 <= jj < N and (ii, jj) not in barrier and (ii, jj) not in sea:
+                if 0 <= ii < N and 0 <= jj < N and (ii, jj) not in barrier and (ii, jj) not in sea and (ii, jj) not in landmask:
                     sea.add((ii, jj)); stack.append((ii, jj))
         for (i, j) in sea: grid[j][i] = WATER
         # spiaggia: fascia di sabbia 2 tile lungo il mare (se non costruita)
@@ -323,6 +345,9 @@ def main():
            'h': houses, 'b': bridges, 'base': base}
     stats = {k: sum(1 for v in flat if v == k) for k in range(10)}
     print('tile:', stats, '| edifici:', len(houses), '| ponti:', len(bridges), '| base:', base, '| metri/tile:', round(P.tm, 1), file=sys.stderr)
+    if stats[WATER] > .85 * N * N or len(houses) < 30:
+        sys.exit('ERRORE: mappa non valida (mare %d%%, edifici %d). Non scrivo il file: il gioco usera\' la mappa schematica. '
+                 'Controlla --center o il file Overpass.' % (round(100 * stats[WATER] / (N * N)), len(houses)))
     if a.out:
         js = 'window.RG_MAPS=window.RG_MAPS||{};window.RG_MAPS[%s]=%s;\n' % (json.dumps(a.name), json.dumps(out, separators=(',', ':')))
         open(a.out, 'w', encoding='utf-8').write(js); print('scritto', a.out, len(js) // 1024, 'KB', file=sys.stderr)
