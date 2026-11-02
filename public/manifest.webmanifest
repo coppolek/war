@@ -1,0 +1,19 @@
+{
+  "name": "Riviera Gunship",
+  "short_name": "Riviera Gunship",
+  "description": "Elicottero d'assalto isometrico a Rimini. Co-op fino a 6 piloti su PC, telefono e tablet.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#17130e",
+  "theme_color": "#17130e",
+  "categories": ["games"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

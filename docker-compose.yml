@@ -1,0 +1,10 @@
+services:
+  riviera:
+    build: .
+    container_name: riviera-gunship
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      # ALLOWED_ORIGINS: "https://riviera.puulp.it"   # decommenta per accettare solo il tuo dominio
+    ports:
+      - "8085:8080"     # Nginx Proxy Manager lo raggiunge su 172.17.0.1:8085 (o IP del VPS)
